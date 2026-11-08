@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Sinal Fraco</title>
+<link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;600&display=swap" rel="stylesheet">
+<script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
+<style>
+*{box-sizing:border-box}
+body{margin:0;font-family:'Fredoka',system-ui,sans-serif;background:#1c1a2e;color:#f3efff;min-height:100vh}
+.wrap{max-width:640px;margin:0 auto;padding:20px 14px 40px}
+header h1{text-align:center;font-size:30px;margin:6px 0 18px}
+header h1 span{color:#ff6b8a}
+.card{background:#2a2742;border-radius:16px;padding:18px;margin-bottom:14px}
+.hide{display:none!important}
+input{width:100%;padding:12px;border-radius:10px;border:2px solid #3d3960;background:#1c1a2e;color:#fff;font:inherit;margin:6px 0}
+input:focus{outline:none;border-color:#ff6b8a}
+button{font:inherit;cursor:pointer;border:none;border-radius:10px;padding:10px 14px;background:#3d3960;color:#fff;transition:transform .1s}
+button:active{transform:scale(.96)}
+button:disabled{opacity:.4;cursor:default}
+.main{background:#ff6b8a;color:#1c1a2e;font-weight:600}
+.ghost{background:transparent;border:1px solid #4a4570}
+.board{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.pl{text-align:center;border:2px solid transparent}
+.pl.lead{border-color:#ffd166}
+.pn{font-size:15px;opacity:.9}
+.you{background:#ff6b8a;color:#1c1a2e;border-radius:6px;padding:1px 6px;font-size:11px}
+.score{font-size:44px;font-weight:600;margin:4px 0 8px}
+.chips{display:flex;flex-wrap:wrap;gap:6px;justify-content:center}
+.chip{font-size:12px;padding:5px 8px}
+.chip.used{text-decoration:line-through}
+.chip.active{background:#ffd166;color:#1c1a2e;opacity:1}
+.rn{font-size:13px;opacity:.75;display:flex;justify-content:space-between}
+.dots i{display:inline-block;width:9px;height:9px;border-radius:50%;background:#4a4570;margin-left:5px}
+.dots i.on{background:#ff6b8a}
+h2{margin:10px 0 6px;font-size:22px}
+.rule{background:#1c1a2e;border-radius:10px;padding:10px 12px;font-size:14px;color:#ffd166}
+.row{display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin:8px 0}
+.row span{min-width:90px}
+.nav{display:flex;justify-content:space-between;gap:8px;margin-top:14px;flex-wrap:wrap}
+.r5 label{display:block;font-size:14px;margin:10px 0}
+.rev{background:#1c1a2e;border-radius:10px;padding:10px;margin:8px 0;font-size:14px;line-height:1.6}
+.rev em{color:#ffd166}
+.muted{opacity:.7;font-size:14px}
+.err{color:#ff8c8c;font-size:13px;min-height:16px}
+.ok{color:#7ee0b0}
+.timer{display:flex;align-items:center;justify-content:space-between;gap:10px}
+#timer{font-size:32px;font-weight:600;min-width:90px;text-align:center}
+#timer.hot{color:#ff6b8a;animation:p .5s infinite alternate}
+@keyframes p{to{transform:scale(1.15)}}
+#log{margin:0;padding-left:18px;font-size:13px;opacity:.8;line-height:1.7}
+#end{text-align:center}
+.big{font-size:56px}
+.final{font-size:22px}
+.code{font-size:34px;letter-spacing:6px;color:#ffd166;font-weight:600;text-align:center;margin:10px 0}
+.or{text-align:center;opacity:.6;margin:14px 0}
+</style>
+</head>
+<body>
+<div class="wrap">
+<header><h1>📡 Sinal <span>Fraco</span></h1></header>
+
+<section id="lobby" class="card">
+  <input id="myname" placeholder="Seu nome" maxlength="20">
+  <button class="main" id="create" style="width:100%;margin-top:6px">Criar sala</button>
+  <div class="or">ou entre na sala do seu amor</div>
+  <input id="code" placeholder="Código da sala" maxlength="4" style="text-transform:uppercase">
+  <button id="join" style="width:100%;margin-top:6px">Entrar na sala</button>
+  <p id="lmsg" class="err"></p>
+  <p class="muted">Antes de começar: cada um escreve 3 vales em segredo (ex.: "vale escolher o filme"). O vencedor escolhe um vale do perdedor para cobrar no reencontro.</p>
+</section>
+
+<section id="wait" class="card hide" style="text-align:center">
+  <p>Mande este código para quem vai jogar com você:</p>
+  <div class="code" id="mycode"></div>
+  <p class="muted">Esperando a outra pessoa entrar...</p>
+</section>
+
+<section id="game" class="hide">
+  <div class="board" id="board"></div>
+  <div class="card" id="round"></div>
+  <div class="card timer">
+    <span>⏱️ Cronômetro</span>
+    <span id="timer">10</span>
+    <button onclick="act({t:'timer'})">Iniciar 10s</button>
+  </div>
+  <div class="card"><div class="muted" style="margin-bottom:6px">Últimos lances</div><ul id="log"></ul></div>
+</section>
+
+<section id="end" class="card hide"></section>
+</div>
+
+<script>
+const R=[
+{t:"Zoom máximo",e:"🔍",d:"Tire uma foto de algo ao seu redor com zoom extremo e mande no WhatsApp. Se o outro errar, mande uma foto menos ampliada.",s:"Acertou na 1ª foto: 3 pts · na 2ª: 2 pts · na 3ª: 1 pt",p:[3,2,1]},
+{t:"Três palavras",e:"💬",d:"Descreva uma memória de vocês dois usando só 3 palavras. O outro precisa dizer qual momento é.",s:"Acertou de primeira: 3 pts · precisou de uma palavra extra: 1 pt",p:[3,1]},
+{t:"O itinerário mentiroso",e:"🧳",d:"Conte 3 coisas que aconteceram no seu dia. Uma é mentira. O outro tem que descobrir qual.",s:"Descobriu: 2 pts para quem adivinhou · foi enganado: 2 pts para quem mentiu",p:[2]},
+{t:"Som ambiente",e:"🎧",d:"Grave um áudio de 5 segundos sem falar nada, só o som do lugar ou de algo que você está fazendo. O outro adivinha.",s:"Acertou exato: 3 pts · chegou perto: 1 pt (quem enviou decide, com honestidade)",p:[3,1]},
+{t:"Eu te conheço",e:"🎯",d:"Sorteiem até 5 perguntas. Cada um escreve em segredo o que acha que o outro vai responder. Depois revelem e digam as respostas verdadeiras.",s:"Cada previsão certa: 2 pts",p:[2]}
+];
+const Q=["O que pediria num restaurante que nunca foi?","Que música escolheria para tocar agora?","Qual superpoder escolheria?","Num incêndio, qual objeto salvaria primeiro?","Que nota de 0 a 10 daria para o próprio dia?","Qual seria o destino da viagem dos sonhos?","Que comida comeria pelo resto da vida?","Qual personagem de filme mais combina com essa pessoa?","O que faria com um dia inteiro livre?","Qual é a maior mania dessa pessoa?","Que animal seria?","Qual emoji mais usa?","Do que mais sente falta de casa agora?","Qual foi o melhor encontro de vocês, na opinião dessa pessoa?","Que talento gostaria de ter?"];
+const CN=["Aposta dobrada","Interferência","Pedir pista"];
+let peer,conn,me,isHost=false,S=null,lastT=null,ti;
+const $=id=>document.getElementById(id);
+const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+function show(id){['lobby','wait','game','end'].forEach(x=>$(x).classList.toggle('hide',x!==id))}
+function fresh(n){return{names:n,sc:[0,0],cur:0,cards:[[0,0,0],[0,0,0]],dbl:[false,false],drawn:[],pred:[[],[]],ready:[false,false],reveal:false,timerId:0,over:false,hist:[],log:["A partida começou! Boa sorte 💘"]}}
+['myname','code'].forEach(i=>$(i).oninput=()=>$('lmsg').textContent='');
+
+$('create').onclick=()=>{
+  const n=$('myname').value.trim(); if(!n) return $('lmsg').textContent='Digite seu nome primeiro.';
+  const code=Math.random().toString(36).slice(2,6).toUpperCase();
+  isHost=true; me=0; peer=new Peer('sinalfraco-'+code);
+  peer.on('open',()=>{show('wait');$('mycode').textContent=code});
+  peer.on('error',e=>{show('lobby');$('lmsg').textContent='Erro de conexão ('+e.type+'). Tente criar outra sala.'});
+  peer.on('connection',c=>{
+    conn=c;
+    c.on('data',d=>{ if(d.hello){ if(!S) S=fresh([n,d.hello]); broadcast(); render(); } else if(d.a) apply(d.a,1); });
+    c.on('close',()=>alert('A conexão caiu. Peça para a outra pessoa entrar de novo com o mesmo código.'));
+  });
+};
+
+$('join').onclick=()=>{
+  const n=$('myname').value.trim(), code=$('code').value.trim().toUpperCase();
+  if(!n) return $('lmsg').textContent='Digite seu nome primeiro.';
+  if(code.length!==4) return $('lmsg').textContent='O código tem 4 caracteres.';
+  me=1; peer=new Peer(); $('lmsg').textContent='Conectando...';
+  peer.on('open',()=>{
+    conn=peer.connect('sinalfraco-'+code,{reliable:true});
+    conn.on('open',()=>conn.send({hello:n}));
+    conn.on('data',d=>{ if(d.s){ S=d.s; render(); } });
+    conn.on('close',()=>alert('A conexão caiu. Entre de novo com o mesmo código.'));
+  });
+  peer.on('error',e=>$('lmsg').textContent=e.type==='peer-unavailable'?'Sala não encontrada. Confira o código.':'Erro de conexão ('+e.type+').');
+};
+
+function act(a){ if(isHost) apply(a,0); else if(conn&&conn.open) conn.send({a}); }
+function broadcast(){ if(conn&&conn.open) conn.send({s:S}); }
+
+function apply(a,from){
+  const N=S.names;
+  if(a.t==='undo'){ const s=S.hist.pop(); if(s){ const h=S.hist; S=JSON.parse(s); S.hist=h; S.log.push('Último lance desfeito'); } }
+  else{
+    S.hist.push(JSON.stringify({...S,hist:[]})); if(S.hist.length>30) S.hist.shift();
+    switch(a.t){
+      case 'add':{const v=S.dbl[a.k]?a.p*2:a.p;S.sc[a.k]+=v;S.log.push(`+${v} para ${N[a.k]}${S.dbl[a.k]?' (aposta dobrada!)':''}`);S.dbl[a.k]=false;break}
+      case 'miss':{const o=1-a.k;S.sc[o]+=2;S.dbl[a.k]=false;S.log.push(`${N[a.k]} errou a aposta: +2 para ${N[o]}`);break}
+      case 'card':{if(from!==a.k||S.cards[a.k][a.j]){S.hist.pop();return}S.cards[a.k][a.j]=1;if(a.j===0)S.dbl[a.k]=true;if(a.j===1)S.timerId++;S.log.push(`${N[a.k]} usou a carta ${CN[a.j]}`);break}
+      case 'timer':S.timerId++;S.log.push('Cronômetro de 10s iniciado');break;
+      case 'next':if(S.cur<4)S.cur++;else S.over=true;break;
+      case 'prev':if(S.cur>0)S.cur--;break;
+      case 'draw':{if(S.ready[0]||S.ready[1]||S.drawn.length>=5){S.hist.pop();return}const l=Q.filter(q=>!S.drawn.includes(q));S.drawn.push(l[Math.floor(Math.random()*l.length)]);break}
+      case 'pred':if(from!==a.k){S.hist.pop();return}S.pred[a.k]=a.v;S.ready[a.k]=true;S.log.push(`${N[a.k]} enviou as previsões em segredo`);break;
+      case 'reveal':if(S.ready[0]&&S.ready[1]){S.reveal=true;S.log.push('Previsões reveladas!')}break;
+      case 'restart':S=fresh(N);S.log.push('Revanche!');break;
+    }
+  }
+  if(S.log.length>20) S.log=S.log.slice(-20);
+  broadcast(); render();
+}
+
+function sendPred(){
+  const v=[...document.querySelectorAll('.pred')].map(i=>i.value.trim());
+  if(v.some(x=>!x)) return $('perr').textContent='Preencha todas as previsões antes de enviar.';
+  act({t:'pred',k:me,v});
+}
+
+function r5(){
+  const o=1-me; let h=`<div class="r5"><button onclick="act({t:'draw'})" ${S.drawn.length>=5||S.ready[0]||S.ready[1]?'disabled':''}>🎲 Sortear pergunta (${S.drawn.length}/5)</button>`;
+  if(S.drawn.length){
+    if(!S.reveal){
+      if(!S.ready[me]) h+=`<p class="muted">Escreva em segredo o que você acha que ${esc(S.names[o])} vai responder:</p>`+S.drawn.map((q,i)=>`<label>${i+1}. ${esc(q)}<input class="pred" maxlength="80" oninput="document.getElementById('perr').textContent=''"></label>`).join('')+`<button class="main" onclick="sendPred()">Enviar em segredo 🤫</button><p id="perr" class="err"></p>`;
+      else h+=`<p class="ok">✓ Suas previsões foram enviadas.</p>`;
+      h+=`<p class="muted">${esc(S.names[0])}: ${S.ready[0]?'pronto ✓':'escrevendo...'} · ${esc(S.names[1])}: ${S.ready[1]?'pronto ✓':'escrevendo...'}</p>`;
+      if(S.ready[0]&&S.ready[1]) h+=`<button class="main" onclick="act({t:'reveal'})">Revelar previsões</button>`;
+    } else {
+      h+=S.drawn.map((q,i)=>`<div class="rev"><b>${esc(q)}</b><div>${esc(S.names[0])} acha que ${esc(S.names[1])} diria: <em>${esc(S.pred[0][i]||'—')}</em></div><div>${esc(S.names[1])} acha que ${esc(S.names[0])} diria: <em>${esc(S.pred[1][i]||'—')}</em></div></div>`).join('')+`<p class="muted">Agora cada um diz a resposta verdadeira. Cada previsão certa vale 2 pontos.</p>`;
+    }
+  }
+  return h+'</div>';
+}
+
+function render(){
+  if(!S) return;
+  if(S.over){ show('end'); renderEnd(); return; }
+  show('game');
+  const drafts=[...document.querySelectorAll('.pred')].map(i=>i.value);
+  $('board').innerHTML=S.names.map((n,k)=>{const lead=S.sc[k]>S.sc[1-k];return `<div class="card pl ${lead?'lead':''}"><div class="pn">${lead?'👑 ':''}${esc(n)} ${k===me?'<span class="you">você</span>':''}</div><div class="score">${S.sc[k]}</div><div class="chips">${CN.map((c,j)=>`<button class="chip ${S.cards[k][j]?'used':''} ${j===0&&S.dbl[k]?'active':''}" ${k!==me||S.cards[k][j]?'disabled':''} onclick="act({t:'card',k:${k},j:${j}})">${c}${j===0&&S.dbl[k]?' (ativa)':''}</button>`).join('')}</div></div>`}).join('');
+  const r=R[S.cur];
+  let h=`<div class="rn"><span>Rodada ${S.cur+1} de 5</span><span class="dots">${R.map((_,i)=>`<i class="${i<=S.cur?'on':''}"></i>`).join('')}</span></div><h2>${r.e} ${r.t}</h2><p>${r.d}</p><p class="rule">${r.s}</p>`;
+  if(S.cur===4) h+=r5();
+  h+=`<div>${S.names.map((n,k)=>`<div class="row"><span>${esc(n)}</span>${r.p.map(p=>`<button onclick="act({t:'add',k:${k},p:${p}})">+${p}</button>`).join('')}${S.dbl[k]?`<button class="ghost" onclick="act({t:'miss',k:${k}})">Errou a aposta</button>`:''}</div>`).join('')}</div>
+  <div class="nav"><button class="ghost" onclick="act({t:'prev'})">← Anterior</button><button class="ghost" onclick="act({t:'undo'})">↶ Desfazer</button><button class="main" onclick="act({t:'next'})">${S.cur===4?'Ver resultado 🏆':'Próxima →'}</button></div>`;
+  $('round').innerHTML=h;
+  document.querySelectorAll('.pred').forEach((i,x)=>{ if(drafts[x]!==undefined) i.value=drafts[x]; });
+  $('log').innerHTML=S.log.slice(-5).reverse().map(l=>`<li>${esc(l)}</li>`).join('');
+  if(lastT===null) lastT=S.timerId;
+  else if(S.timerId!==lastT){ lastT=S.timerId; runTimer(); }
+}
+
+function runTimer(){
+  clearInterval(ti); const end=Date.now()+10000, el=$('timer'); el.classList.remove('hot');
+  ti=setInterval(()=>{ const s=Math.ceil((end-Date.now())/1000);
+    if(s<=0){ el.textContent='Tempo!'; el.classList.add('hot'); clearInterval(ti); }
+    else { el.textContent=s; if(s<=3) el.classList.add('hot'); } },200);
+}
+
+function renderEnd(){
+  const t=S.sc[0]===S.sc[1], w=S.sc[0]>S.sc[1]?0:1, N=S.names;
+  $('end').innerHTML=`<div class="big">${t?'💞':'🏆'}</div><h2>${t?'Empate! Sinal perfeito.':esc(N[w])+' venceu a noite!'}</h2><p class="final">${esc(N[0])} <b>${S.sc[0]}</b> × <b>${S.sc[1]}</b> ${esc(N[1])}</p><p>${t?'Cada um escolhe um vale do outro.':esc(N[w])+' escolhe um vale de '+esc(N[1-w])+' para cobrar no reencontro.'}</p><button class="main" onclick="act({t:'restart'})">Revanche</button>`;
+}
+</script>
+</body>
+</html>
